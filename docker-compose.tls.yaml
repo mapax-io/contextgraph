@@ -1,0 +1,10 @@
+# HTTPS overlay — use when DOMAIN is set in .env and ports 80/443 are free:
+#
+#   docker compose -f docker-compose.yaml -f docker-compose.tls.yaml up -d
+#
+# Caddy then answers https://$DOMAIN with an automatic certificate.
+services:
+  caddy:
+    ports: !override
+      - "80:80"
+      - "443:443"

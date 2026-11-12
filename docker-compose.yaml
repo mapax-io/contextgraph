@@ -1,0 +1,49 @@
+# codegraph-mcp — a code-knowledge-graph MCP service. Two services, one door:
+#
+#   caddy ──/mcp*, /sse*──► cgc (CodeGraphContext behind mcp-proxy)
+#        bearer-walled AT CADDY — cgc itself is never exposed.
+#
+#   ./install.sh            # .env with a strong random token + up -d --build
+#
+# The cgc container clones the repos itself (REPOS + GIT_TOKEN in .env),
+# indexes them into an embedded graph database on the cgc-data volume, and
+# re-syncs every REINDEX_HOURS. Queries run against the graph, not the
+# clones — so this stack can live anywhere Docker runs (a VPS, RunPod, …),
+# nowhere near the code's own servers.
+#
+# With DOMAIN set in .env, add docker-compose.tls.yaml and Caddy serves
+# real HTTPS on 80/443.
+
+services:
+  cgc:
+    build: .
+    restart: unless-stopped
+    environment:
+      REPOS: ${REPOS:-}
+      GIT_TOKEN: ${GIT_TOKEN:-}
+      REINDEX_HOURS: ${REINDEX_HOURS:-24}
+      # Embedded-store buffer. The library default is multi-GB — far too
+      # hungry for a shared box; 512 MB serves mid-size repos comfortably.
+      CGC_EMBEDDED_BUFFER_POOL_MB: ${CGC_BUFFER_MB:-512}
+    volumes:
+      - cgc-data:/data
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    environment:
+      # ":8080" (plain HTTP) unless .env sets a real DOMAIN — the default
+      # lives HERE because Caddy's own {$VAR:default} only applies when the
+      # variable is UNSET, and compose always sets it.
+      DOMAIN: ${DOMAIN:-:8080}
+      CODEGRAPH_TOKEN: ${CODEGRAPH_TOKEN:?run ./install.sh (or make_env.py) first}
+    depends_on: [cgc]
+    restart: unless-stopped
+
+volumes:
+  cgc-data:
+  caddy-data:
