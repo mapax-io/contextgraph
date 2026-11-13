@@ -1,14 +1,17 @@
 #!/bin/sh
-# codegraph-mcp entrypoint: sync the repos, index them, serve MCP over HTTP.
+# contextgraph entrypoint: sync the repos, index them, serve MCP over HTTP.
 #
 #   REPOS          comma-separated https git URLs. Private github.com ones
 #                  authenticate with GIT_TOKEN.
 #   GIT_TOKEN      read-only token used for every github.com clone/pull.
 #                  Never logged, never served; stored 0600 inside /data.
+#   INDEX_PATHS    comma-separated folders ALREADY IN the container (bind
+#                  mounts, ideally read-only) to index as they are — no
+#                  clone, no pull; the mount's owner keeps them fresh.
 #   REINDEX_HOURS  re-pull + re-index cycle (default 24). 0 = index once.
 #
-# The graph database is self-contained: once a repo is indexed, queries
-# never touch the clone again — the cycle only keeps the graph fresh.
+# The graph database is self-contained: once code is indexed, queries
+# never touch the source again — the cycle only keeps the graph fresh.
 set -u
 export HOME=/data
 mkdir -p /data/repos
@@ -40,6 +43,17 @@ sync_all() {
     echo "[index] $name"
     cgc index "/data/repos/$name" \
       || echo "[index] WARN failed: $name"
+  done
+  printf '%s\n' "${INDEX_PATHS:-}" | tr ',' '\n' | while read -r path; do
+    path=$(printf '%s' "$path" | tr -d '[:space:]')
+    [ -z "$path" ] && continue
+    if [ -d "$path" ]; then
+      echo "[index] (mounted) $path"
+      cgc index "$path" \
+        || echo "[index] WARN failed: $path"
+    else
+      echo "[index] WARN no such mounted path: $path"
+    fi
   done
 }
 
