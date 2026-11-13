@@ -1,8 +1,12 @@
-# codegraph-mcp's one public door. The bearer wall lives HERE (cgc has no
+# contextgraph's one public door. The bearer wall lives HERE (cgc has no
 # auth of its own and is never exposed). The site address comes from
 # compose's DOMAIN env: ":8080" (plain HTTP) unless .env sets a real DOMAIN —
 # then, with docker-compose.tls.yaml added, Caddy serves it with automatic
 # HTTPS.
+#
+# header_up Host: the MCP SDK's streamable-HTTP server validates the Host
+# header (DNS-rebinding protection) and answers 421 to names it does not
+# know; upstream only ever sees its own loopback name.
 #
 # /healthz          open (liveness probes)
 # /mcp*, /sse*      Authorization: Bearer <CODEGRAPH_TOKEN> or 401
@@ -18,13 +22,19 @@
 	}
 
 	handle /mcp* {
-		reverse_proxy cgc:8900
+		reverse_proxy cgc:8900 {
+			header_up Host "127.0.0.1:8900"
+		}
 	}
 	handle /sse* {
-		reverse_proxy cgc:8900
+		reverse_proxy cgc:8900 {
+			header_up Host "127.0.0.1:8900"
+		}
 	}
 	handle /messages* {
-		reverse_proxy cgc:8900
+		reverse_proxy cgc:8900 {
+			header_up Host "127.0.0.1:8900"
+		}
 	}
 
 	handle {
